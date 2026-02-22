@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "282481364647",
+    "project_id": "un-dia-sin-beber-d61e1",
+    "storage_bucket": "un-dia-sin-beber-d61e1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:282481364647:android:ebe3d200044bec94265582",
+        "android_client_info": {
+          "package_name": "com.aberinkula.undiasinbeber"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC0P-1QQk4kqlOuOn8WC7F3j8K7QzaTKUo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
