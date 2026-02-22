@@ -64,7 +64,10 @@ class _SplashPageState extends State<SplashPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Colors.green.shade400, Colors.green.shade700],
+            colors: [
+              const Color.fromARGB(255, 102, 187, 153),
+              Colors.green.shade700,
+            ],
           ),
         ),
         child: Center(
