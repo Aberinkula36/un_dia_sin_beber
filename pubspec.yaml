@@ -12,8 +12,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # Firebase
-  
+  # Firebase  
   firebase_core: ^4.4.0
   firebase_auth: ^6.1.4
   cloud_firestore: ^6.1.2
@@ -26,6 +25,8 @@ dependencies:
 
   # Actualización automática
   updatermaster: ^0.0.2
+
+  http: ^1.1.0
 
   # Información de la app
   package_info_plus: ^8.0.0
