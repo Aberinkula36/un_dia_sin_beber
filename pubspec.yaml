@@ -1,7 +1,7 @@
 name: dia_sin_beber
 description: "Aplicación para registrar los progresos de la sobriedad."
 publish_to: 'none'
-version: 1.0.1+1
+version: 1.0.3+1
 
 environment:
   sdk: ^3.11.0
