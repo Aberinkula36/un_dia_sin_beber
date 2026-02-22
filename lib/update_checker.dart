@@ -30,11 +30,18 @@ class UpdateChecker {
         bool mandatory = data['mandatory'] ?? false;
 
         print("📊 Última versión en GitHub: $latestVersion");
-        print("📱 Versión actual: $currentVersion");
+        print("🔗 URL del APK: $apkUrl");
 
         if (_isNewerVersion(latestVersion, currentVersion)) {
           print("🔄 ¡Hay actualización disponible!");
-          _showUpdateDialog(context, latestVersion, apkUrl, notes, mandatory);
+          // Siempre mostramos el diálogo, sin restricciones de tiempo
+          await _showUpdateDialog(
+            context,
+            latestVersion,
+            apkUrl,
+            notes,
+            mandatory,
+          );
         } else {
           print("✅ No hay actualizaciones disponibles");
         }
@@ -61,52 +68,153 @@ class UpdateChecker {
     return false;
   }
 
-  static void _showUpdateDialog(
+  static void _showErrorDialog(BuildContext context, String mensaje) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Error'),
+          content: Text(mensaje),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static Future<void> _showUpdateDialog(
     BuildContext context,
     String version,
     String apkUrl,
     String notes,
     bool mandatory,
-  ) {
-    showDialog(
+  ) async {
+    return showDialog(
       context: context,
-      barrierDismissible: !mandatory,
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text(
             mandatory
                 ? 'Actualización requerida'
                 : '¡Nueva versión disponible!',
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Versión $version disponible'),
-              const SizedBox(height: 10),
-              const Text(
-                'Novedades:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 5),
-              Text(notes),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Versión $version disponible',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                const Text(
+                  'Novedades:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 5),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Text(notes, style: const TextStyle(height: 1.5)),
+                ),
+                const SizedBox(height: 15),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'La descarga se abrirá en el navegador. '
+                          'Después de instalar el APK, vuelve a abrir la app.',
+                          style: TextStyle(fontSize: 12, color: Colors.blue),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             if (!mandatory)
               TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Más tarde'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text(
+                  'Más tarde',
+                  style: TextStyle(color: Colors.grey),
+                ),
               ),
             ElevatedButton(
               onPressed: () async {
-                final url = Uri.parse(apkUrl);
-                if (await canLaunchUrl(url)) {
-                  await launchUrl(url);
+                print("📲 Botón Descargar pulsado");
+                print("🔗 URL: $apkUrl");
+
+                try {
+                  final url = Uri.parse(apkUrl);
+                  print("🌐 URI parseada: $url");
+
+                  bool launched = await launchUrl(
+                    url,
+                    mode: LaunchMode.platformDefault,
+                  );
+                  print("✅ ¿Lanzado? $launched");
+
+                  if (launched) {
+                    print("✅ URL lanzada correctamente");
+                    Navigator.of(context).pop();
+                  } else {
+                    print(
+                      "❌ No se pudo lanzar con platformDefault, intentando externalApplication",
+                    );
+
+                    bool launchedAlternative = await launchUrl(
+                      url,
+                      mode: LaunchMode.externalApplication,
+                    );
+
+                    if (launchedAlternative) {
+                      print("✅ URL lanzada con externalApplication");
+                      Navigator.of(context).pop();
+                    } else {
+                      print("❌ Todos los métodos fallaron");
+                      Navigator.of(context).pop();
+                      _showErrorDialog(context, "No se pudo abrir el enlace");
+                    }
+                  }
+                } catch (e) {
+                  print("❌ Error al lanzar URL: $e");
+                  Navigator.of(context).pop();
+                  _showErrorDialog(context, "Error al abrir: $e");
                 }
-                Navigator.of(context).pop();
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(120, 40),
+              ),
               child: const Text('Descargar'),
             ),
           ],

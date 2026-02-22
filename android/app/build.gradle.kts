@@ -1,3 +1,12 @@
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
+}
+
 android {
     namespace = "com.aberinkula.undiasinbeber"
     compileSdk = flutter.compileSdkVersion
@@ -13,10 +22,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.aberinkula.undiasinbeber"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -25,22 +31,32 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    // Configuración para renombrar el APK
+    afterEvaluate {
+        tasks.matching { it.name.startsWith("package") }.configureEach {
+            doLast {
+                val variantName = name.replace("package", "").replaceFirstChar { it.lowercase() }
+                val versionName = android.defaultConfig.versionName ?: "1.0.0"
+                val apkName = "un_dia_sin_beber_v${versionName}.apk"
+                
+                val sourceFile = file("build/outputs/flutter-apk/app-$variantName.apk")
+                val targetFile = file("build/outputs/flutter-apk/$apkName")
+                
+                if (sourceFile.exists()) {
+                    sourceFile.copyTo(targetFile, overwrite = true)
+                    println("✅ APK renombrado a: $apkName")
+                }
+            }
         }
     }
 }
 
 flutter {
     source = "../.."
-}
-
-plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
 }
 
 dependencies {
