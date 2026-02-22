@@ -2,5 +2,5 @@
   "version": "1.0.1",
   "apk_url": "https://github.com/Aberinkula36/un_dia_sin_beber/releases/download/v1.0.1/app-release.apk",
   "mandatory": false,
-  "release_notes": "- Corrección de errores\n- Mejora en el registro de peso\n- Nuevo gráfico de evolución"
+  "release_notes": "- Nueva funcionalidad de peso\n- Corrección de errores\n- Mejora en el diseño"
 }
