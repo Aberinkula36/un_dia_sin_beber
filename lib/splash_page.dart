@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'update_checker.dart'; // Importa el verificador de actualizaciones
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -11,11 +12,21 @@ class _SplashPageState extends State<SplashPage> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    });
+    _checkForUpdates(); // Primero verifica actualizaciones
+    _navigateToLogin(); // Luego navega al login
+  }
+
+  // Función para verificar actualizaciones
+  _checkForUpdates() async {
+    await UpdateChecker.checkForUpdates(context);
+  }
+
+  // Función para navegar al login después de 2 segundos
+  _navigateToLogin() async {
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) {
+      Navigator.pushReplacementNamed(context, '/login');
+    }
   }
 
   @override
@@ -26,10 +37,7 @@ class _SplashPageState extends State<SplashPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              const Color.fromARGB(255, 255, 255, 255),
-              Colors.green.shade700,
-            ],
+            colors: [Colors.green.shade400, Colors.green.shade700],
           ),
         ),
         child: Center(
