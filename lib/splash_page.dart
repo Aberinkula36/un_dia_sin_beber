@@ -1,39 +1,55 @@
 import 'package:flutter/material.dart';
-import 'login_page.dart';
-import 'register_page.dart';
 
-class SplashPage extends StatelessWidget {
+class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
+
+  @override
+  State<SplashPage> createState() => _SplashPageState();
+}
+
+class _SplashPageState extends State<SplashPage> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset('assets/logo.png', width: 150, height: 150),
-            const SizedBox(height: 40),
-            ElevatedButton(
-              child: const Text('Iniciar sesión'),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              child: const Text('Registrarse'),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const RegisterPage()),
-                );
-              },
-            ),
-          ],
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              const Color.fromARGB(255, 255, 255, 255),
+              Colors.green.shade700,
+            ],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset('assets/logo.png', width: 100, height: 100),
+              const SizedBox(height: 20),
+              const Text(
+                'Un día sin beber',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const CircularProgressIndicator(color: Colors.white),
+            ],
+          ),
         ),
       ),
     );
