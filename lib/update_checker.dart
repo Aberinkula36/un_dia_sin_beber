@@ -12,7 +12,8 @@ class UpdateChecker {
 
       // Verificar actualizaciones desde GitHub
       bool hasUpdate = await UpdaterMaster.withGithub(
-        repo: "https://github.com/TU_USUARIO/TU_REPO", // Cambia por tu repo
+        repo:
+            "https://github.com/Aberinkula36/un_dia_sin_beber", // Cambia por tu repo
         version: "v$currentVersion",
       );
 
