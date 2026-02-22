@@ -1,6 +1,6 @@
 # un_dia_sin_beber
 
-A new Flutter project.
+Una app para dejar de beber.
 
 ## Getting Started
 
