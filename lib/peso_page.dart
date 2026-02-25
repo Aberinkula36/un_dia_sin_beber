@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui' as ui;
 
+bool _vistaTotal = false; // false = vista mensual, true = vista total
+
 class PesoPage extends StatefulWidget {
   const PesoPage({super.key});
 
@@ -16,6 +18,7 @@ class _PesoPageState extends State<PesoPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   DateTime? _fechaInicio;
+  DateTime _mesSeleccionado = DateTime.now();
   List<Map<String, dynamic>> _historialPeso = [];
   Map<String, double> _pesosPorFecha = {};
   bool _loading = true;
@@ -36,18 +39,18 @@ class _PesoPageState extends State<PesoPage> {
         final data = doc.data()!;
         setState(() {
           _fechaInicio = (data['fecha_inicio'] as Timestamp).toDate();
+          _mesSeleccionado = DateTime.now();
+
           _historialPeso = List<Map<String, dynamic>>.from(
             data['historial_peso'] ?? [],
           );
 
-          // Ordenar por fecha
           _historialPeso.sort((a, b) {
             final fechaA = (a['fecha'] as Timestamp).toDate();
             final fechaB = (b['fecha'] as Timestamp).toDate();
             return fechaA.compareTo(fechaB);
           });
 
-          // Crear un mapa de fecha a peso para fácil acceso
           _pesosPorFecha = {};
           for (var registro in _historialPeso) {
             final fecha = (registro['fecha'] as Timestamp).toDate();
@@ -65,22 +68,94 @@ class _PesoPageState extends State<PesoPage> {
     }
   }
 
-  // Detectar si es la fecha de inicio y el peso es placeholder
+  void _mesAnterior() {
+    setState(() {
+      _mesSeleccionado = DateTime(
+        _mesSeleccionado.year,
+        _mesSeleccionado.month - 1,
+        1,
+      );
+    });
+  }
+
+  void _mesSiguiente() {
+    final hoy = DateTime.now();
+    final nuevoMes = DateTime(
+      _mesSeleccionado.year,
+      _mesSeleccionado.month + 1,
+      1,
+    );
+
+    if (nuevoMes.isBefore(DateTime(hoy.year, hoy.month + 1, 1))) {
+      setState(() {
+        _mesSeleccionado = nuevoMes;
+      });
+    }
+  }
+
+  List<DateTime> _generarDiasDelMes() {
+    if (_fechaInicio == null) return [];
+
+    final primerDiaMes = DateTime(
+      _mesSeleccionado.year,
+      _mesSeleccionado.month,
+      1,
+    );
+    final ultimoDiaMes = DateTime(
+      _mesSeleccionado.year,
+      _mesSeleccionado.month + 1,
+      0,
+    );
+
+    final hoy = DateTime.now();
+    final dias = <DateTime>[];
+
+    for (var i = 0; i < ultimoDiaMes.day; i++) {
+      final fecha = DateTime(
+        _mesSeleccionado.year,
+        _mesSeleccionado.month,
+        i + 1,
+      );
+
+      if (fecha.isAfter(_fechaInicio!.subtract(const Duration(days: 1))) &&
+          fecha.isBefore(hoy.add(const Duration(days: 1)))) {
+        dias.add(fecha);
+      }
+    }
+
+    return dias;
+  }
+
+  bool _mesTieneDias() {
+    return _generarDiasDelMes().isNotEmpty;
+  }
+
+  List<Map<String, dynamic>> _getHistorialDelMes() {
+    final diasDelMes = _generarDiasDelMes();
+    final historialMes = <Map<String, dynamic>>[];
+
+    for (var fecha in diasDelMes) {
+      final fechaStr = DateFormat('yyyy-MM-dd').format(fecha);
+      final peso = _pesosPorFecha[fechaStr];
+      if (peso != null) {
+        historialMes.add({'fecha': Timestamp.fromDate(fecha), 'peso': peso});
+      }
+    }
+
+    return historialMes;
+  }
+
   bool _esFechaInicioSinEditar(DateTime fecha) {
     if (_fechaInicio == null) return false;
 
     final fechaStr = DateFormat('yyyy-MM-dd').format(fecha);
     final fechaInicioStr = DateFormat('yyyy-MM-dd').format(_fechaInicio!);
 
-    // Si es la fecha de inicio y solo hay un registro (el de hoy) o el peso es el mismo que el de hoy
     if (fechaStr == fechaInicioStr) {
-      // Buscar si hay un registro específico para esta fecha
       final pesoEnFecha = _pesosPorFecha[fechaStr];
 
-      // Si hay un registro y es diferente al peso de hoy (suponiendo que el de hoy es el último)
       if (_historialPeso.isNotEmpty && pesoEnFecha != null) {
         final pesoHoy = _historialPeso.last['peso'].toDouble();
-        // Si el peso de la fecha de inicio es igual al de hoy, podría ser placeholder
         return (pesoEnFecha == pesoHoy && _historialPeso.length > 1);
       }
     }
@@ -116,6 +191,7 @@ class _PesoPageState extends State<PesoPage> {
             onPressed: () {
               final nuevoPeso = double.tryParse(controller.text);
               if (nuevoPeso != null && nuevoPeso > 0) {
+                // Solo > 0, no permite 0
                 Navigator.pop(context, true);
               }
             },
@@ -138,36 +214,30 @@ class _PesoPageState extends State<PesoPage> {
     try {
       final fechaStr = DateFormat('yyyy-MM-dd').format(fecha);
 
-      // Buscar si ya existe un registro para esta fecha
       final indexExistente = _historialPeso.indexWhere((registro) {
         final regFecha = (registro['fecha'] as Timestamp).toDate();
         return DateFormat('yyyy-MM-dd').format(regFecha) == fechaStr;
       });
 
       if (indexExistente >= 0) {
-        // Actualizar registro existente
         _historialPeso[indexExistente]['peso'] = nuevoPeso;
       } else {
-        // Agregar nuevo registro
         _historialPeso.add({
           'fecha': Timestamp.fromDate(fecha),
           'peso': nuevoPeso,
         });
       }
 
-      // Ordenar por fecha
       _historialPeso.sort((a, b) {
         final fechaA = (a['fecha'] as Timestamp).toDate();
         final fechaB = (b['fecha'] as Timestamp).toDate();
         return fechaA.compareTo(fechaB);
       });
 
-      // Actualizar en Firestore
       await _firestore.collection('users').doc(user.uid).update({
         'historial_peso': _historialPeso,
       });
 
-      // Actualizar estado local
       setState(() {
         _pesosPorFecha[fechaStr] = nuevoPeso;
       });
@@ -192,25 +262,72 @@ class _PesoPageState extends State<PesoPage> {
     }
   }
 
-  List<DateTime> _generarDias() {
-    if (_fechaInicio == null) return [];
+  Future<void> _eliminarPeso(DateTime fecha) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar registro'),
+        content: Text(
+          '¿Eliminar el peso del ${DateFormat('dd/MM/yyyy').format(fecha)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
 
-    final hoy = DateTime.now();
-    final dias = <DateTime>[];
-
-    for (var i = 0; i <= hoy.difference(_fechaInicio!).inDays; i++) {
-      dias.add(_fechaInicio!.add(Duration(days: i)));
+    if (confirm == true) {
+      await _borrarPeso(fecha);
     }
+  }
 
-    return dias;
+  Future<void> _borrarPeso(DateTime fecha) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final fechaStr = DateFormat('yyyy-MM-dd').format(fecha);
+
+      _historialPeso.removeWhere((registro) {
+        final regFecha = (registro['fecha'] as Timestamp).toDate();
+        return DateFormat('yyyy-MM-dd').format(regFecha) == fechaStr;
+      });
+
+      await _firestore.collection('users').doc(user.uid).update({
+        'historial_peso': _historialPeso,
+      });
+
+      setState(() {
+        _pesosPorFecha.remove(fechaStr);
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registro eliminado'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error al eliminar: $e');
+    }
   }
 
   Color _getColorForChange(double pesoAnterior, double pesoActual) {
     if (pesoAnterior == 0) return Colors.grey;
     final diferencia = pesoActual - pesoAnterior;
-    if (diferencia < 0) return Colors.green; // Bajó de peso (mejor)
-    if (diferencia > 0) return Colors.red; // Subió de peso
-    return Colors.blue; // Se mantuvo
+    if (diferencia < 0) return Colors.green;
+    if (diferencia > 0) return Colors.red;
+    return Colors.blue;
   }
 
   @override
@@ -220,72 +337,48 @@ class _PesoPageState extends State<PesoPage> {
         title: const Text('Evolución del Peso'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
+        bottom: _buildMonthNavigator(),
+        actions: [
+          // Botón para cambiar entre vista mensual y total
+          IconButton(
+            icon: Icon(_vistaTotal ? Icons.calendar_month : Icons.show_chart),
+            onPressed: () {
+              setState(() {
+                _vistaTotal = !_vistaTotal;
+              });
+            },
+            tooltip: _vistaTotal ? 'Ver por meses' : 'Ver evolución total',
+          ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _fechaInicio == null
           ? const Center(child: Text('No hay datos disponibles'))
+          : _vistaTotal
+          ? _buildVistaTotal() // Nueva función para vista total
           : Column(
               children: [
-                // Resumen con diseño mejorado
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.teal.shade50,
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(30),
-                      bottomRight: Radius.circular(30),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildResumenCard(
-                            'Inicio',
-                            _historialPeso.isNotEmpty
-                                ? '${_historialPeso.first['peso'].toStringAsFixed(1)} kg'
-                                : 'N/A',
-                            Icons.flag,
-                            Colors.orange,
-                          ),
-                          _buildResumenCard(
-                            'Actual',
-                            _historialPeso.isNotEmpty
-                                ? '${_historialPeso.last['peso'].toStringAsFixed(1)} kg'
-                                : 'N/A',
-                            Icons.trending_up,
-                            Colors.teal,
-                          ),
-                        ],
-                      ),
-                      if (_historialPeso.length >= 2) ...[
-                        const SizedBox(height: 10),
-                        _buildCambioCard(),
-                      ],
-                    ],
-                  ),
-                ),
+                _buildResumenMensual(),
 
-                // Gráfico de evolución
-                if (_historialPeso.length >= 2)
+                if (_getHistorialDelMes().length >= 2)
                   Container(
-                    height: 220,
+                    height: 180,
                     padding: const EdgeInsets.only(
                       left: 30,
                       right: 30,
-                      top: 20,
+                      top: 10,
                       bottom: 10,
                     ),
                     child: CustomPaint(
-                      painter: PesoGraphPainter(historial: _historialPeso),
-                      size: const Size(double.infinity, 220),
+                      painter: PesoGraphPainter(
+                        historial: _getHistorialDelMes(),
+                      ),
+                      size: const Size(double.infinity, 180),
                     ),
                   ),
 
-                // Leyenda del gráfico
-                if (_historialPeso.length >= 2)
+                if (_getHistorialDelMes().length >= 2)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
@@ -302,172 +395,324 @@ class _PesoPageState extends State<PesoPage> {
 
                 const SizedBox(height: 10),
 
-                // AQUÍ ESTÁ EL ListView.builder
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: _generarDias().length,
-                    itemBuilder: (context, index) {
-                      final fecha = _generarDias()[index];
-                      final fechaStr = DateFormat('yyyy-MM-dd').format(fecha);
-                      final peso = _pesosPorFecha[fechaStr];
-
-                      // Encontrar el peso anterior para determinar el color
-                      double pesoAnterior = 0;
-                      if (index > 0) {
-                        final fechaAnterior = _generarDias()[index - 1];
-                        final fechaAnteriorStr = DateFormat(
-                          'yyyy-MM-dd',
-                        ).format(fechaAnterior);
-                        pesoAnterior = _pesosPorFecha[fechaAnteriorStr] ?? 0;
-                      }
-
-                      final colorCambio = peso != null && pesoAnterior > 0
-                          ? _getColorForChange(pesoAnterior, peso)
-                          : Colors.grey;
-
-                      final esFechaInicioSinEditar = _esFechaInicioSinEditar(
-                        fecha,
-                      );
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 4,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: esFechaInicioSinEditar
-                                ? Colors.orange.withOpacity(0.2)
-                                : colorCambio.withOpacity(0.2),
-                            child: Icon(
-                              esFechaInicioSinEditar
-                                  ? Icons.warning_amber_rounded
-                                  : (peso != null
-                                        ? Icons.monitor_weight
-                                        : Icons.pending),
-                              color: esFechaInicioSinEditar
-                                  ? Colors.orange
-                                  : colorCambio,
-                            ),
-                          ),
-                          title: Text(
-                            DateFormat('EEEE, d MMMM yyyy').format(fecha),
-                            style: TextStyle(
-                              fontWeight: esFechaInicioSinEditar
-                                  ? FontWeight.bold
-                                  : FontWeight.w500,
-                              color: esFechaInicioSinEditar
-                                  ? Colors.orange.shade800
-                                  : null,
-                            ),
-                          ),
-                          subtitle: Text(
-                            peso != null
-                                ? '${peso.toStringAsFixed(1)} kg'
-                                : 'Pendiente de registrar',
-                            style: TextStyle(
-                              color: esFechaInicioSinEditar
-                                  ? Colors.orange.shade600
-                                  : (peso != null ? Colors.black : Colors.grey),
-                              fontWeight: esFechaInicioSinEditar
-                                  ? FontWeight.bold
-                                  : null,
-                            ),
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.teal),
-                            onPressed: () => _editarPeso(fecha, peso ?? 0),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                  child: _mesTieneDias()
+                      ? _buildListaDias()
+                      : _buildMensajeSinDias(),
                 ),
               ],
             ),
     );
   }
 
-  Widget _buildResumenCard(
+  PreferredSizeWidget _buildMonthNavigator() {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(60),
+      child: Container(
+        color: Colors.teal.shade800,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.chevron_left, color: Colors.white),
+              onPressed: _mesAnterior,
+            ),
+            Text(
+              DateFormat('MMMM yyyy').format(_mesSeleccionado),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.chevron_right, color: Colors.white),
+              onPressed: _mesSiguiente,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVistaTotal() {
+    // Obtener todo el historial desde el inicio
+    final historialCompleto = _historialPeso;
+
+    if (historialCompleto.isEmpty) {
+      return const Center(child: Text('No hay datos de peso registrados'));
+    }
+
+    final pesoInicial = historialCompleto.first['peso'].toDouble();
+    final pesoActual = historialCompleto.last['peso'].toDouble();
+    final diferencia = pesoActual - pesoInicial;
+    final colorDiferencia = diferencia > 0 ? Colors.red : Colors.green;
+    final diasTranscurridos = DateTime.now().difference(_fechaInicio!).inDays;
+
+    return Column(
+      children: [
+        // Resumen total
+        Container(
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.teal.shade400, Colors.teal.shade700],
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              const Text(
+                'Evolución Total',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildTotalInfo(
+                    'Inicio',
+                    '${pesoInicial.toStringAsFixed(1)} kg',
+                    Icons.flag,
+                  ),
+                  _buildTotalInfo(
+                    'Actual',
+                    '${pesoActual.toStringAsFixed(1)} kg',
+                    Icons.trending_up,
+                  ),
+                  _buildTotalInfo(
+                    'Cambio',
+                    '${diferencia.toStringAsFixed(1)} kg',
+                    diferencia > 0 ? Icons.arrow_upward : Icons.arrow_downward,
+                    color: colorDiferencia,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${diasTranscurridos} días de evolución',
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+
+        // Gráfico total
+        if (historialCompleto.length >= 2)
+          Container(
+            height: 250,
+            padding: const EdgeInsets.only(
+              left: 30,
+              right: 30,
+              top: 20,
+              bottom: 10,
+            ),
+            child: CustomPaint(
+              painter: PesoGraphPainter(historial: historialCompleto),
+              size: const Size(double.infinity, 250),
+            ),
+          ),
+
+        // Leyenda
+        if (historialCompleto.length >= 2)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildLeyendaItem('Mejoró', Colors.green),
+                const SizedBox(width: 20),
+                _buildLeyendaItem('Empeoró', Colors.red),
+                const SizedBox(width: 20),
+                _buildLeyendaItem('Estable', Colors.blue),
+              ],
+            ),
+          ),
+
+        // Estadísticas adicionales
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _buildEstadisticaCard(
+                'Promedio de peso',
+                _calcularPromedio(),
+                Icons.calculate,
+              ),
+              _buildEstadisticaCard(
+                'Peso máximo',
+                _calcularMaximo(),
+                Icons.trending_up,
+                Colors.orange,
+              ),
+              _buildEstadisticaCard(
+                'Peso mínimo',
+                _calcularMinimo(),
+                Icons.trending_down,
+                Colors.green,
+              ),
+              _buildEstadisticaCard(
+                'Registros',
+                '${historialCompleto.length} días',
+                Icons.calendar_today,
+                Colors.purple,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Funciones auxiliares para la vista total
+  Widget _buildTotalInfo(
     String label,
     String valor,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 2,
-            blurRadius: 5,
+    IconData icon, {
+    Color? color,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          valor,
+          style: TextStyle(
+            color: color ?? Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEstadisticaCard(
+    String label,
+    String valor,
+    IconData icon, [
+    Color color = Colors.teal,
+  ]) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: color.withOpacity(0.1),
+          child: Icon(icon, color: color),
+        ),
+        title: Text(label),
+        trailing: Text(
+          valor,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
       ),
-      child: Column(
+    );
+  }
+
+  String _calcularPromedio() {
+    if (_historialPeso.isEmpty) return 'N/A';
+    double suma = 0;
+    for (var registro in _historialPeso) {
+      suma += registro['peso'].toDouble();
+    }
+    return '${(suma / _historialPeso.length).toStringAsFixed(1)} kg';
+  }
+
+  String _calcularMaximo() {
+    if (_historialPeso.isEmpty) return 'N/A';
+    double maximo = 0;
+    for (var registro in _historialPeso) {
+      maximo = maximo > registro['peso'] ? maximo : registro['peso'].toDouble();
+    }
+    return '${maximo.toStringAsFixed(1)} kg';
+  }
+
+  String _calcularMinimo() {
+    if (_historialPeso.isEmpty) return 'N/A';
+    double minimo = double.infinity;
+    for (var registro in _historialPeso) {
+      minimo = minimo < registro['peso'] ? minimo : registro['peso'].toDouble();
+    }
+    return '${minimo.toStringAsFixed(1)} kg';
+  }
+
+  Widget _buildResumenMensual() {
+    final diasDelMes = _generarDiasDelMes();
+    if (diasDelMes.isEmpty) return const SizedBox();
+
+    final pesosDelMes = diasDelMes
+        .map((f) => _pesosPorFecha[DateFormat('yyyy-MM-dd').format(f)])
+        .where((p) => p != null)
+        .toList();
+
+    if (pesosDelMes.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        child: const Text(
+          'No hay registros de peso este mes',
+          style: TextStyle(fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+
+    final primerPeso = pesosDelMes.first!;
+    final ultimoPeso = pesosDelMes.last!;
+    final diferencia = ultimoPeso - primerPeso;
+    final colorDiferencia = diferencia > 0 ? Colors.red : Colors.green;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.teal.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          Icon(icon, color: color),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          _buildMiniResumen(
+            'Inicio mes',
+            '${primerPeso.toStringAsFixed(1)} kg',
           ),
-          const SizedBox(height: 4),
-          Text(
-            valor,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
+          _buildMiniResumen('Final mes', '${ultimoPeso.toStringAsFixed(1)} kg'),
+          _buildMiniResumen(
+            'Cambio',
+            '${diferencia.toStringAsFixed(1)} kg',
+            color: colorDiferencia,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildCambioCard() {
-    final inicial = _historialPeso.first['peso'].toDouble();
-    final actual = _historialPeso.last['peso'].toDouble();
-    final diferencia = actual - inicial;
-    final esMejora = diferencia < 0;
-    final color = esMejora
-        ? Colors.green
-        : (diferencia > 0 ? Colors.red : Colors.blue);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            esMejora
-                ? Icons.arrow_downward
-                : (diferencia > 0 ? Icons.arrow_upward : Icons.remove),
-            color: color,
+  Widget _buildMiniResumen(String label, String valor, {Color? color}) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 4),
+        Text(
+          valor,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color ?? Colors.black,
           ),
-          const SizedBox(width: 8),
-          Text(
-            '${diferencia.abs().toStringAsFixed(1)} kg ${esMejora ? 'bajados' : (diferencia > 0 ? 'subidos' : 'sin cambios')}',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -485,6 +730,112 @@ class _PesoPageState extends State<PesoPage> {
           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
       ],
+    );
+  }
+
+  Widget _buildListaDias() {
+    final dias = _generarDiasDelMes();
+
+    return ListView.builder(
+      itemCount: dias.length,
+      itemBuilder: (context, index) {
+        final fecha = dias[index];
+        final fechaStr = DateFormat('yyyy-MM-dd').format(fecha);
+        final peso = _pesosPorFecha[fechaStr];
+
+        double pesoAnterior = 0;
+        if (index > 0) {
+          final fechaAnterior = dias[index - 1];
+          final fechaAnteriorStr = DateFormat(
+            'yyyy-MM-dd',
+          ).format(fechaAnterior);
+          pesoAnterior = _pesosPorFecha[fechaAnteriorStr] ?? 0;
+        }
+
+        final colorCambio = peso != null && pesoAnterior > 0
+            ? _getColorForChange(pesoAnterior, peso)
+            : Colors.grey;
+
+        final esFechaInicioSinEditar = _esFechaInicioSinEditar(fecha);
+
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: esFechaInicioSinEditar
+                  ? Colors.orange.withOpacity(0.2)
+                  : colorCambio.withOpacity(0.2),
+              child: Icon(
+                esFechaInicioSinEditar
+                    ? Icons.warning_amber_rounded
+                    : (peso != null ? Icons.monitor_weight : Icons.pending),
+                color: esFechaInicioSinEditar ? Colors.orange : colorCambio,
+              ),
+            ),
+            title: Text(
+              DateFormat('EEEE, d').format(fecha),
+              style: TextStyle(
+                fontWeight: esFechaInicioSinEditar
+                    ? FontWeight.bold
+                    : FontWeight.w500,
+                color: esFechaInicioSinEditar ? Colors.orange.shade800 : null,
+              ),
+            ),
+            subtitle: Text(
+              peso != null
+                  ? '${peso.toStringAsFixed(1)} kg'
+                  : 'Pendiente de registrar',
+              style: TextStyle(
+                color: esFechaInicioSinEditar
+                    ? Colors.orange.shade600
+                    : (peso != null ? Colors.black : Colors.grey),
+              ),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (peso != null)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => _eliminarPeso(fecha),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.teal),
+                  onPressed: () => _editarPeso(fecha, peso ?? 0),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMensajeSinDias() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.calendar_today, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text(
+            'No hay días para mostrar en este mes',
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+          if (_fechaInicio != null)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'El primer mes disponible es ${DateFormat('MMMM yyyy').format(_fechaInicio!)}',
+                style: const TextStyle(fontStyle: FontStyle.italic),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -509,24 +860,20 @@ class PesoGraphPainter extends CustomPainter {
     double minPeso = double.infinity;
     double maxPeso = 0;
 
-    // Encontrar min y max para escalar
     for (var registro in historial) {
       final peso = registro['peso'].toDouble();
       if (peso < minPeso) minPeso = peso;
       if (peso > maxPeso) maxPeso = peso;
     }
 
-    // Añadir margen
     minPeso -= 2;
     maxPeso += 2;
 
-    // El tamaño disponible para dibujar (restando el padding)
     final anchoDisponible = size.width;
     final altoDisponible = size.height - 20;
 
     final pasoX = anchoDisponible / (historial.length - 1);
 
-    // Dibujar líneas de fondo
     final backgroundPaint = Paint()
       ..color = Colors.grey.shade200
       ..strokeWidth = 1;
@@ -540,7 +887,6 @@ class PesoGraphPainter extends CustomPainter {
       );
     }
 
-    // Calcular puntos
     for (int i = 0; i < historial.length; i++) {
       final peso = historial[i]['peso'].toDouble();
       final x = i * pasoX;
@@ -551,7 +897,6 @@ class PesoGraphPainter extends CustomPainter {
       puntos.add(Offset(x, y.clamp(10, 10 + altoDisponible)));
     }
 
-    // Dibujar líneas entre puntos con colores según la tendencia
     for (int i = 0; i < puntos.length - 1; i++) {
       final pesoActual = historial[i]['peso'].toDouble();
       final pesoSiguiente = historial[i + 1]['peso'].toDouble();
@@ -567,7 +912,6 @@ class PesoGraphPainter extends CustomPainter {
       canvas.drawLine(puntos[i], puntos[i + 1], paint);
     }
 
-    // Dibujar puntos
     for (int i = 0; i < puntos.length; i++) {
       final peso = historial[i]['peso'].toDouble();
 
@@ -591,7 +935,6 @@ class PesoGraphPainter extends CustomPainter {
       canvas.drawCircle(puntos[i], 6, pointPaint);
       pointPaint.style = PaintingStyle.fill;
 
-      // Mostrar valores
       final textSpan = TextSpan(
         text: '${peso.toStringAsFixed(1)}',
         style: const TextStyle(

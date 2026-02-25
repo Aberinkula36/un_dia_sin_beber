@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 class UpdateChecker {
   static const String versionUrl =
-      'https://raw.githubusercontent.com/Aberinkula36/un_dia_sin_beber/master/version.json';
+      'https://raw.githubusercontent.com/Aberinkula36/un_dia_sin_beber/main/version.json';
 
   static Future<void> checkForUpdates(BuildContext context) async {
     try {
