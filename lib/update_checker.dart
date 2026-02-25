@@ -6,19 +6,19 @@ import 'package:url_launcher/url_launcher.dart';
 
 class UpdateChecker {
   static const String versionUrl =
-      'https://github.com/Aberinkula36/un_dia_sin_beber/raw/refs/heads/main/version.json';
+      'https://github.com/Aberinkula36/un_dia_sin_beber/releases/download/v1.1.0/version.json';
 
   static Future<void> checkForUpdates(BuildContext context) async {
     try {
-      print("🔍 Verificando actualizaciones...");
+      debugPrint("🔍 Verificando actualizaciones...");
 
       // Obtener versión actual
       PackageInfo packageInfo = await PackageInfo.fromPlatform();
       String currentVersion = packageInfo.version;
-      print("📱 Versión actual: $currentVersion");
+      debugPrint("📱 Versión actual: $currentVersion");
 
       // Obtener información de versión desde GitHub
-      print("🌐 Consultando: $versionUrl");
+      debugPrint("🌐 Consultando: $versionUrl");
       final response = await http.get(Uri.parse(versionUrl));
 
       if (response.statusCode == 200) {
@@ -29,11 +29,11 @@ class UpdateChecker {
         String notes = data['release_notes'] ?? 'Mejoras y correcciones';
         bool mandatory = data['mandatory'] ?? false;
 
-        print("📊 Última versión en GitHub: $latestVersion");
-        print("🔗 URL del APK: $apkUrl");
+        debugPrint("📊 Última versión en GitHub: $latestVersion");
+        debugPrint("🔗 URL del APK: $apkUrl");
 
         if (_isNewerVersion(latestVersion, currentVersion)) {
-          print("🔄 ¡Hay actualización disponible!");
+          debugPrint("🔄 ¡Hay actualización disponible!");
           // Siempre mostramos el diálogo, sin restricciones de tiempo
           await _showUpdateDialog(
             context,
@@ -43,13 +43,13 @@ class UpdateChecker {
             mandatory,
           );
         } else {
-          print("✅ No hay actualizaciones disponibles");
+          debugPrint("✅ No hay actualizaciones disponibles");
         }
       } else {
-        print("❌ Error al consultar GitHub: ${response.statusCode}");
+        debugPrint("❌ Error al consultar GitHub: ${response.statusCode}");
       }
     } catch (e) {
-      print("❌ Error en checkForUpdates: $e");
+      debugPrint("❌ Error en checkForUpdates: $e");
     }
   }
 
@@ -63,7 +63,7 @@ class UpdateChecker {
         if (latestParts[i] < currentParts[i]) return false;
       }
     } catch (e) {
-      print("Error comparando versiones: $e");
+      debugPrint("Error comparando versiones: $e");
     }
     return false;
   }
