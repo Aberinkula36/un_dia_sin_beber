@@ -6,19 +6,19 @@ import 'package:url_launcher/url_launcher.dart';
 
 class UpdateChecker {
   static const String versionUrl =
-      'https://github.com/Aberinkula36/un_dia_sin_beber/releases/download/v1.1.0/version.json';
+      'https://github.com/Aberinkula36/un_dia_sin_beber/raw/refs/heads/main/version.json';
 
   static Future<void> checkForUpdates(BuildContext context) async {
     try {
-      debugPrint("🔍 Verificando actualizaciones...");
+      print("🔍 Verificando actualizaciones...");
 
       // Obtener versión actual
       PackageInfo packageInfo = await PackageInfo.fromPlatform();
       String currentVersion = packageInfo.version;
-      debugPrint("📱 Versión actual: $currentVersion");
+      print("📱 Versión actual: $currentVersion");
 
       // Obtener información de versión desde GitHub
-      debugPrint("🌐 Consultando: $versionUrl");
+      print("🌐 Consultando: $versionUrl");
       final response = await http.get(Uri.parse(versionUrl));
 
       if (response.statusCode == 200) {
@@ -29,12 +29,11 @@ class UpdateChecker {
         String notes = data['release_notes'] ?? 'Mejoras y correcciones';
         bool mandatory = data['mandatory'] ?? false;
 
-        debugPrint("📊 Última versión en GitHub: $latestVersion");
-        debugPrint("🔗 URL del APK: $apkUrl");
+        print("📊 Última versión en GitHub: $latestVersion");
+        print("🔗 URL del APK: $apkUrl");
 
         if (_isNewerVersion(latestVersion, currentVersion)) {
-          debugPrint("🔄 ¡Hay actualización disponible!");
-          // Siempre mostramos el diálogo, sin restricciones de tiempo
+          print("🔄 ¡Hay actualización disponible!");
           await _showUpdateDialog(
             context,
             latestVersion,
@@ -43,13 +42,13 @@ class UpdateChecker {
             mandatory,
           );
         } else {
-          debugPrint("✅ No hay actualizaciones disponibles");
+          print("✅ No hay actualizaciones disponibles");
         }
       } else {
-        debugPrint("❌ Error al consultar GitHub: ${response.statusCode}");
+        print("❌ Error al consultar GitHub: ${response.statusCode}");
       }
     } catch (e) {
-      debugPrint("❌ Error en checkForUpdates: $e");
+      print("❌ Error en checkForUpdates: $e");
     }
   }
 
@@ -63,7 +62,7 @@ class UpdateChecker {
         if (latestParts[i] < currentParts[i]) return false;
       }
     } catch (e) {
-      debugPrint("Error comparando versiones: $e");
+      print("Error comparando versiones: $e");
     }
     return false;
   }
@@ -145,7 +144,7 @@ class UpdateChecker {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'La descarga se abrirá en el navegador. '
+                          'La descarga se abrirá en el navegador externo. '
                           'Después de instalar el APK, vuelve a abrir la app.',
                           style: TextStyle(fontSize: 12, color: Colors.blue),
                         ),
@@ -178,31 +177,17 @@ class UpdateChecker {
 
                   bool launched = await launchUrl(
                     url,
-                    mode: LaunchMode.platformDefault,
+                    mode: LaunchMode.externalApplication,
                   );
                   print("✅ ¿Lanzado? $launched");
 
                   if (launched) {
-                    print("✅ URL lanzada correctamente");
+                    print("✅ URL lanzada correctamente en navegador externo");
                     Navigator.of(context).pop();
                   } else {
-                    print(
-                      "❌ No se pudo lanzar con platformDefault, intentando externalApplication",
-                    );
-
-                    bool launchedAlternative = await launchUrl(
-                      url,
-                      mode: LaunchMode.externalApplication,
-                    );
-
-                    if (launchedAlternative) {
-                      print("✅ URL lanzada con externalApplication");
-                      Navigator.of(context).pop();
-                    } else {
-                      print("❌ Todos los métodos fallaron");
-                      Navigator.of(context).pop();
-                      _showErrorDialog(context, "No se pudo abrir el enlace");
-                    }
+                    print("❌ No se pudo lanzar");
+                    Navigator.of(context).pop();
+                    _showErrorDialog(context, "No se pudo abrir el enlace");
                   }
                 } catch (e) {
                   print("❌ Error al lanzar URL: $e");

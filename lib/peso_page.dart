@@ -96,11 +96,6 @@ class _PesoPageState extends State<PesoPage> {
   List<DateTime> _generarDiasDelMes() {
     if (_fechaInicio == null) return [];
 
-    final primerDiaMes = DateTime(
-      _mesSeleccionado.year,
-      _mesSeleccionado.month,
-      1,
-    );
     final ultimoDiaMes = DateTime(
       _mesSeleccionado.year,
       _mesSeleccionado.month + 1,
