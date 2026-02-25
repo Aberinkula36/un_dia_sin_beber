@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart'; // AÑADIDO
 import 'peso_page.dart';
 
 class HomePage extends StatelessWidget {
@@ -33,7 +34,6 @@ class HomePage extends StatelessWidget {
     }
   }
 
-  // Función para calcular la edad actual desde la fecha de nacimiento
   int _calcularEdad(DateTime fechaNacimiento) {
     final today = DateTime.now();
     int edad = today.year - fechaNacimiento.year;
@@ -45,10 +45,15 @@ class HomePage extends StatelessWidget {
     return edad;
   }
 
-  // Función para formatear la fecha de nacimiento
   String _formatearFechaNacimiento(DateTime? fecha) {
     if (fecha == null) return 'No registrada';
     return DateFormat('dd/MM/yyyy').format(fecha);
+  }
+
+  // NUEVA FUNCIÓN PARA OBTENER LA VERSIÓN
+  Future<String> _getVersion() async {
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    return packageInfo.version;
   }
 
   @override
@@ -94,7 +99,6 @@ class HomePage extends StatelessWidget {
           final fechaInicio = (data['fecha_inicio'] as Timestamp).toDate();
           final diasSobrio = DateTime.now().difference(fechaInicio).inDays;
 
-          // Obtener fecha de nacimiento y calcular edad actual
           final fechaNacimiento = (data['fecha_nacimiento'] as Timestamp?)
               ?.toDate();
           final edadActual = fechaNacimiento != null
@@ -103,7 +107,6 @@ class HomePage extends StatelessWidget {
 
           final sexo = data['sexo'];
 
-          // Obtener el peso actualizado del historial
           double pesoActual = data['peso_inicial']?.toDouble() ?? 0;
           double pesoInicial = data['peso_inicial']?.toDouble() ?? 0;
 
@@ -111,7 +114,6 @@ class HomePage extends StatelessWidget {
             data['historial_peso'] ?? [],
           );
           if (historial.isNotEmpty) {
-            // Ordenar por fecha y tomar el último
             historial.sort((a, b) {
               final fechaA = (a['fecha'] as Timestamp).toDate();
               final fechaB = (b['fecha'] as Timestamp).toDate();
@@ -217,7 +219,6 @@ class HomePage extends StatelessWidget {
                               ),
                             ],
                           ),
-                          // Mostrar fecha de nacimiento como información adicional
                           if (fechaNacimiento != null) ...[
                             const Divider(height: 20),
                             Row(
@@ -332,6 +333,26 @@ class HomePage extends StatelessWidget {
                   Text(
                     'Desde el ${DateFormat('dd/MM/yyyy').format(fechaInicio)}',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // 🆕 NÚMERO DE VERSIÓN AÑADIDO AQUÍ
+                  FutureBuilder<String>(
+                    future: _getVersion(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData) {
+                        return Text(
+                          'Versión ${snapshot.data}',
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        );
+                      }
+                      return const SizedBox();
+                    },
                   ),
                 ],
               ),
