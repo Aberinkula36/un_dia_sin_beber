@@ -1,7 +1,6 @@
 ﻿{
   "version": "1.1.0",
-  "apk_url": "https://github.com/Aberinkula36/un_dia_sin_beber/raw/refs/heads/main/un_dia_sin_beber_v1.1.0.apk",
+  "apk_url": "https://raw.githubusercontent.com/Aberinkula36/un_dia_sin_beber/main/un_dia_sin_beber_v1.1.0.apk",
   "mandatory": false,
   "release_notes": "- Nueva vista de evolución total 📊\n- Botón para alternar entre vista mensual y total\n- Posibilidad de eliminar registros de peso\n- Gráfico mejorado por meses\n- Correcciones y mejoras generales"
 }
-
