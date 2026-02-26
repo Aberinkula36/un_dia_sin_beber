@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'update_checker.dart';
+import 'l10n/app_localizations.dart';
+import 'locale_provider.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -9,9 +12,6 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage> {
-  bool _updateProcessed = false; // Cambiado de _updateChecked
-  bool _canNavigate = false;
-
   @override
   void initState() {
     super.initState();
@@ -19,77 +19,52 @@ class _SplashPageState extends State<SplashPage> {
   }
 
   Future<void> _initialize() async {
-    // Primero verificar actualizaciones (ESPERAR a que termine)
-    await _checkForUpdates();
+    // Verificar actualizaciones
+    UpdateChecker.checkForUpdates(context);
 
-    // Después de verificar, permitir navegación
-    setState(() {
-      _updateProcessed = true;
-      _canNavigate = true;
-    });
+    // Esperar 2 segundos y navegar
+    await Future.delayed(const Duration(seconds: 2));
 
-    // Navegar al login
-    _navigateToLogin();
-  }
-
-  Future<void> _checkForUpdates() async {
-    // Llamar al checker y ESPERAR a que termine completamente
-    await UpdateChecker.checkForUpdates(context);
-    print("✅ Proceso de actualización completado");
-  }
-
-  _navigateToLogin() async {
-    // Pequeña pausa para asegurar que todo está listo
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (mounted && _canNavigate && _updateProcessed) {
-      print("🚀 Navegando a login...");
+    if (mounted) {
       Navigator.pushReplacementNamed(context, '/login');
-    } else {
-      print(
-        "⏳ Esperando condiciones: canNavigate=$_canNavigate, updateProcessed=$_updateProcessed",
-      );
-      // Si no se cumplen, esperar un poco más y reintentar
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) _navigateToLogin();
-      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color.fromARGB(255, 102, 187, 153),
-              Colors.green.shade700,
-            ],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Image.asset('assets/logo.png', width: 100, height: 100),
-              const SizedBox(height: 20),
-              const Text(
-                'Un día sin beber',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+    return Consumer<LocaleProvider>(
+      builder: (context, localeProvider, child) {
+        return Scaffold(
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.teal.shade400, Colors.teal.shade700],
               ),
-              const SizedBox(height: 10),
-              const CircularProgressIndicator(color: Colors.white),
-            ],
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset('assets/logo.png', width: 100, height: 100),
+                  const SizedBox(height: 20),
+                  Text(
+                    context.l10n.appTitle,
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const CircularProgressIndicator(color: Colors.white),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

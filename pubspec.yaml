@@ -11,11 +11,11 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-
-  # Firebase  
-  firebase_core: ^4.4.0
-  firebase_auth: ^6.1.4
-  cloud_firestore: ^6.1.2
+  provider: ^6.1.2
+  firebase_core: ^3.15.2  
+  firebase_auth: ^5.5.1   
+  cloud_firestore: ^5.6.5 
+  firebase_app_check: ^0.3.2+10
 
   # Otros
   table_calendar: ^3.0.9
@@ -40,6 +40,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 
 flutter:
+  generate: true
   uses-material-design: true
   assets:
     - assets/logo.png

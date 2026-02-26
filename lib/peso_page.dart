@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'dart:ui' as ui;
-
-bool _vistaTotal = false; // false = vista mensual, true = vista total
+import 'l10n/app_localizations.dart';
+import 'locale_provider.dart';
 
 class PesoPage extends StatefulWidget {
   const PesoPage({super.key});
@@ -22,6 +23,7 @@ class _PesoPageState extends State<PesoPage> {
   List<Map<String, dynamic>> _historialPeso = [];
   Map<String, double> _pesosPorFecha = {};
   bool _loading = true;
+  bool _vistaTotal = false;
 
   @override
   void initState() {
@@ -159,6 +161,8 @@ class _PesoPageState extends State<PesoPage> {
   }
 
   Future<void> _editarPeso(DateTime fecha, double pesoActual) async {
+    final l10n = AppLocalizations.of(context);
+
     final TextEditingController controller = TextEditingController(
       text: pesoActual > 0 ? pesoActual.toStringAsFixed(1) : '',
     );
@@ -166,13 +170,13 @@ class _PesoPageState extends State<PesoPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Editar peso - ${DateFormat('dd/MM/yyyy').format(fecha)}'),
+        title: Text('${l10n.edit} - ${DateFormat('dd/MM/yyyy').format(fecha)}'),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Peso (kg)',
-            hintText: 'Ej: 70.5',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: l10n.weight,
+            hintText: l10n.weightHint,
+            border: const OutlineInputBorder(),
           ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           autofocus: true,
@@ -180,17 +184,16 @@ class _PesoPageState extends State<PesoPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () {
               final nuevoPeso = double.tryParse(controller.text);
               if (nuevoPeso != null && nuevoPeso > 0) {
-                // Solo > 0, no permite 0
                 Navigator.pop(context, true);
               }
             },
-            child: const Text('Guardar'),
+            child: Text(l10n.save),
           ),
         ],
       ),
@@ -205,6 +208,9 @@ class _PesoPageState extends State<PesoPage> {
   Future<void> _guardarPeso(DateTime fecha, double nuevoPeso) async {
     final user = _auth.currentUser;
     if (user == null) return;
+
+    // Obtener l10n aquí mismo
+    final l10n = AppLocalizations.of(context);
 
     try {
       final fechaStr = DateFormat('yyyy-MM-dd').format(fecha);
@@ -239,17 +245,14 @@ class _PesoPageState extends State<PesoPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Peso actualizado correctamente'),
-            backgroundColor: Colors.green,
-          ),
+          SnackBar(content: Text(l10n.save), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al guardar: $e'),
+            content: Text('${l10n.error}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -258,22 +261,25 @@ class _PesoPageState extends State<PesoPage> {
   }
 
   Future<void> _eliminarPeso(DateTime fecha) async {
+    // Obtener l10n aquí mismo
+    final l10n = AppLocalizations.of(context);
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Eliminar registro'),
+        title: Text(l10n.delete),
         content: Text(
-          '¿Eliminar el peso del ${DateFormat('dd/MM/yyyy').format(fecha)}?',
+          '¿${l10n.delete} ${DateFormat('dd/MM/yyyy').format(fecha)}?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Eliminar'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -325,82 +331,126 @@ class _PesoPageState extends State<PesoPage> {
     return Colors.blue;
   }
 
+  String _calcularPromedio() {
+    if (_historialPeso.isEmpty) return 'N/A';
+    double suma = 0;
+    for (var registro in _historialPeso) {
+      suma += registro['peso'].toDouble();
+    }
+    return '${(suma / _historialPeso.length).toStringAsFixed(1)} kg';
+  }
+
+  String _calcularMaximo() {
+    if (_historialPeso.isEmpty) return 'N/A';
+    double maximo = 0;
+    for (var registro in _historialPeso) {
+      maximo = maximo > registro['peso'] ? maximo : registro['peso'].toDouble();
+    }
+    return '${maximo.toStringAsFixed(1)} kg';
+  }
+
+  String _calcularMinimo() {
+    if (_historialPeso.isEmpty) return 'N/A';
+    double minimo = double.infinity;
+    for (var registro in _historialPeso) {
+      minimo = minimo < registro['peso'] ? minimo : registro['peso'].toDouble();
+    }
+    return '${minimo.toStringAsFixed(1)} kg';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Evolución del Peso'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
-        bottom: _buildMonthNavigator(),
-        actions: [
-          // Botón para cambiar entre vista mensual y total
-          IconButton(
-            icon: Icon(_vistaTotal ? Icons.calendar_month : Icons.show_chart),
-            onPressed: () {
-              setState(() {
-                _vistaTotal = !_vistaTotal;
-              });
-            },
-            tooltip: _vistaTotal ? 'Ver por meses' : 'Ver evolución total',
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _fechaInicio == null
-          ? const Center(child: Text('No hay datos disponibles'))
-          : _vistaTotal
-          ? _buildVistaTotal() // Nueva función para vista total
-          : Column(
-              children: [
-                _buildResumenMensual(),
+    return Consumer<LocaleProvider>(
+      builder: (context, localeProvider, child) {
+        final l10n = AppLocalizations.of(context);
+        final languageCode = localeProvider.locale.languageCode;
 
-                if (_getHistorialDelMes().length >= 2)
-                  Container(
-                    height: 180,
-                    padding: const EdgeInsets.only(
-                      left: 30,
-                      right: 30,
-                      top: 10,
-                      bottom: 10,
-                    ),
-                    child: CustomPaint(
-                      painter: PesoGraphPainter(
-                        historial: _getHistorialDelMes(),
-                      ),
-                      size: const Size(double.infinity, 180),
-                    ),
-                  ),
-
-                if (_getHistorialDelMes().length >= 2)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildLeyendaItem('Mejoró', Colors.green),
-                        const SizedBox(width: 20),
-                        _buildLeyendaItem('Empeoró', Colors.red),
-                        const SizedBox(width: 20),
-                        _buildLeyendaItem('Estable', Colors.blue),
-                      ],
-                    ),
-                  ),
-
-                const SizedBox(height: 10),
-
-                Expanded(
-                  child: _mesTieneDias()
-                      ? _buildListaDias()
-                      : _buildMensajeSinDias(),
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(l10n.weightEvolution),
+            backgroundColor: Colors.teal,
+            foregroundColor: Colors.white,
+            bottom: _vistaTotal
+                ? null
+                : _buildMonthNavigator(l10n, languageCode),
+            actions: [
+              IconButton(
+                icon: Icon(
+                  _vistaTotal ? Icons.calendar_month : Icons.show_chart,
                 ),
-              ],
-            ),
+                onPressed: () {
+                  setState(() {
+                    _vistaTotal = !_vistaTotal;
+                  });
+                },
+                tooltip: _vistaTotal ? l10n.monthlyView : l10n.totalView,
+              ),
+            ],
+          ),
+          body: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _fechaInicio == null
+              ? Center(child: Text(l10n.noData))
+              : _vistaTotal
+              ? _buildVistaTotal(l10n, languageCode)
+              : Column(
+                  children: [
+                    _buildResumenMensual(l10n),
+
+                    if (_getHistorialDelMes().length >= 2)
+                      Container(
+                        height: 180,
+                        padding: const EdgeInsets.only(
+                          left: 30,
+                          right: 30,
+                          top: 10,
+                          bottom: 30, // ← AUMENTADO DE 10 A 30
+                        ),
+                        child: CustomPaint(
+                          painter: PesoGraphPainter(
+                            historial: _getHistorialDelMes(),
+                            languageCode: languageCode,
+                          ),
+                          size: const Size(double.infinity, 180),
+                        ),
+                      ),
+
+                    // ESPACIO ADICIONAL ENTRE GRÁFICO Y LEYENDA
+                    const SizedBox(height: 25), // ← AUMENTADO DE 15 A 25
+
+                    if (_getHistorialDelMes().length >= 2)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 15),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _buildLeyendaItem(l10n.improved, Colors.green),
+                            const SizedBox(width: 35), // ← AUMENTADO DE 25 A 35
+                            _buildLeyendaItem(l10n.worsened, Colors.red),
+                            const SizedBox(width: 35), // ← AUMENTADO DE 25 A 35
+                            _buildLeyendaItem(l10n.stable, Colors.blue),
+                          ],
+                        ),
+                      ),
+
+                    const SizedBox(height: 20), // ← AUMENTADO DE 15 A 20
+
+                    Expanded(
+                      child: _mesTieneDias()
+                          ? _buildListaDias(l10n, languageCode)
+                          : _buildMensajeSinDias(l10n, languageCode),
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
 
-  PreferredSizeWidget _buildMonthNavigator() {
+  PreferredSizeWidget _buildMonthNavigator(
+    AppLocalizations l10n,
+    String languageCode,
+  ) {
     return PreferredSize(
       preferredSize: const Size.fromHeight(60),
       child: Container(
@@ -413,7 +463,7 @@ class _PesoPageState extends State<PesoPage> {
               onPressed: _mesAnterior,
             ),
             Text(
-              DateFormat('MMMM yyyy').format(_mesSeleccionado),
+              DateFormat('MMMM yyyy', languageCode).format(_mesSeleccionado),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -430,23 +480,215 @@ class _PesoPageState extends State<PesoPage> {
     );
   }
 
-  Widget _buildVistaTotal() {
-    // Obtener todo el historial desde el inicio
-    final historialCompleto = _historialPeso;
+  Widget _buildResumenMensual(AppLocalizations l10n) {
+    final diasDelMes = _generarDiasDelMes();
+    if (diasDelMes.isEmpty) return const SizedBox();
 
-    if (historialCompleto.isEmpty) {
-      return const Center(child: Text('No hay datos de peso registrados'));
+    final pesosDelMes = diasDelMes
+        .map((f) => _pesosPorFecha[DateFormat('yyyy-MM-dd').format(f)])
+        .where((p) => p != null)
+        .toList();
+
+    if (pesosDelMes.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          l10n.noRecordsThisMonth,
+          style: const TextStyle(fontStyle: FontStyle.italic),
+        ),
+      );
     }
 
-    final pesoInicial = historialCompleto.first['peso'].toDouble();
-    final pesoActual = historialCompleto.last['peso'].toDouble();
+    final primerPeso = pesosDelMes.first!;
+    final ultimoPeso = pesosDelMes.last!;
+    final diferencia = ultimoPeso - primerPeso;
+    final colorDiferencia = diferencia > 0 ? Colors.red : Colors.green;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.teal.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildMiniResumen(l10n.start, '${primerPeso.toStringAsFixed(1)} kg'),
+          _buildMiniResumen(
+            l10n.current,
+            '${ultimoPeso.toStringAsFixed(1)} kg',
+          ),
+          _buildMiniResumen(
+            l10n.change,
+            '${diferencia.toStringAsFixed(1)} kg',
+            color: colorDiferencia,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniResumen(String label, String valor, {Color? color}) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 4),
+        Text(
+          valor,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color ?? Colors.black,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLeyendaItem(String texto, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ), // ← AUMENTADO
+      child: Row(
+        children: [
+          Container(
+            width: 18, // ← AUMENTADO DE 16 A 18
+            height: 18, // ← AUMENTADO DE 16 A 18
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10), // ← AUMENTADO DE 8 A 10
+          Text(
+            texto,
+            style: const TextStyle(
+              fontSize: 14, // ← AUMENTADO DE 13 A 14
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListaDias(AppLocalizations l10n, String languageCode) {
+    final dias = _generarDiasDelMes();
+
+    return ListView.builder(
+      itemCount: dias.length,
+      itemBuilder: (context, index) {
+        final fecha = dias[index];
+        final fechaStr = DateFormat('yyyy-MM-dd').format(fecha);
+        final peso = _pesosPorFecha[fechaStr];
+
+        double pesoAnterior = 0;
+        if (index > 0) {
+          final fechaAnterior = dias[index - 1];
+          final fechaAnteriorStr = DateFormat(
+            'yyyy-MM-dd',
+          ).format(fechaAnterior);
+          pesoAnterior = _pesosPorFecha[fechaAnteriorStr] ?? 0;
+        }
+
+        final colorCambio = peso != null && pesoAnterior > 0
+            ? _getColorForChange(pesoAnterior, peso)
+            : Colors.grey;
+
+        final esFechaInicioSinEditar = _esFechaInicioSinEditar(fecha);
+
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: esFechaInicioSinEditar
+                  ? Colors.orange.withOpacity(0.2)
+                  : colorCambio.withOpacity(0.2),
+              child: Icon(
+                esFechaInicioSinEditar
+                    ? Icons.warning_amber_rounded
+                    : (peso != null ? Icons.monitor_weight : Icons.pending),
+                color: esFechaInicioSinEditar ? Colors.orange : colorCambio,
+              ),
+            ),
+            title: Text(
+              DateFormat('EEEE, d', languageCode).format(fecha),
+              style: TextStyle(
+                fontWeight: esFechaInicioSinEditar
+                    ? FontWeight.bold
+                    : FontWeight.w500,
+                color: esFechaInicioSinEditar ? Colors.orange.shade800 : null,
+              ),
+            ),
+            subtitle: Text(
+              peso != null ? '${peso.toStringAsFixed(1)} kg' : l10n.pending,
+              style: TextStyle(
+                color: esFechaInicioSinEditar
+                    ? Colors.orange.shade600
+                    : (peso != null ? Colors.black : Colors.grey),
+              ),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (peso != null)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => _eliminarPeso(fecha),
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.teal),
+                  onPressed: () => _editarPeso(fecha, peso ?? 0),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMensajeSinDias(AppLocalizations l10n, String languageCode) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.calendar_today, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text(
+            l10n.noRecordsThisMonth,
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+          if (_fechaInicio != null)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                '${l10n.firstMonthAvailable} ${DateFormat('MMMM yyyy', languageCode).format(_fechaInicio!)}',
+                style: const TextStyle(fontStyle: FontStyle.italic),
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVistaTotal(AppLocalizations l10n, String languageCode) {
+    if (_historialPeso.isEmpty) {
+      return Center(child: Text(l10n.noData));
+    }
+
+    final pesoInicial = _historialPeso.first['peso'].toDouble();
+    final pesoActual = _historialPeso.last['peso'].toDouble();
     final diferencia = pesoActual - pesoInicial;
     final colorDiferencia = diferencia > 0 ? Colors.red : Colors.green;
     final diasTranscurridos = DateTime.now().difference(_fechaInicio!).inDays;
 
     return Column(
       children: [
-        // Resumen total
         Container(
           padding: const EdgeInsets.all(16),
           margin: const EdgeInsets.all(8),
@@ -458,9 +700,9 @@ class _PesoPageState extends State<PesoPage> {
           ),
           child: Column(
             children: [
-              const Text(
-                'Evolución Total',
-                style: TextStyle(
+              Text(
+                l10n.totalView,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -471,17 +713,17 @@ class _PesoPageState extends State<PesoPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _buildTotalInfo(
-                    'Inicio',
+                    l10n.start,
                     '${pesoInicial.toStringAsFixed(1)} kg',
                     Icons.flag,
                   ),
                   _buildTotalInfo(
-                    'Actual',
+                    l10n.current,
                     '${pesoActual.toStringAsFixed(1)} kg',
                     Icons.trending_up,
                   ),
                   _buildTotalInfo(
-                    'Cambio',
+                    l10n.change,
                     '${diferencia.toStringAsFixed(1)} kg',
                     diferencia > 0 ? Icons.arrow_upward : Icons.arrow_downward,
                     color: colorDiferencia,
@@ -490,70 +732,73 @@ class _PesoPageState extends State<PesoPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${diasTranscurridos} días de evolución',
+                '$diasTranscurridos ${l10n.records}',
                 style: const TextStyle(color: Colors.white70),
               ),
             ],
           ),
         ),
 
-        // Gráfico total
-        if (historialCompleto.length >= 2)
+        if (_historialPeso.length >= 2)
           Container(
             height: 250,
             padding: const EdgeInsets.only(
               left: 30,
               right: 30,
               top: 20,
-              bottom: 10,
+              bottom: 25, // ← Aumentado para más espacio
             ),
             child: CustomPaint(
-              painter: PesoGraphPainter(historial: historialCompleto),
+              painter: PesoGraphPainter(
+                historial: _historialPeso,
+                languageCode: languageCode,
+              ),
               size: const Size(double.infinity, 250),
             ),
           ),
 
-        // Leyenda
-        if (historialCompleto.length >= 2)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        // Espacio entre gráfico y leyenda
+        const SizedBox(height: 20),
+
+        if (_historialPeso.length >= 2)
+          Container(
+            margin: const EdgeInsets.only(bottom: 15),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildLeyendaItem('Mejoró', Colors.green),
-                const SizedBox(width: 20),
-                _buildLeyendaItem('Empeoró', Colors.red),
-                const SizedBox(width: 20),
-                _buildLeyendaItem('Estable', Colors.blue),
+                _buildLeyendaItem(l10n.improved, Colors.green),
+                const SizedBox(width: 30),
+                _buildLeyendaItem(l10n.worsened, Colors.red),
+                const SizedBox(width: 30),
+                _buildLeyendaItem(l10n.stable, Colors.blue),
               ],
             ),
           ),
 
-        // Estadísticas adicionales
         Expanded(
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               _buildEstadisticaCard(
-                'Promedio de peso',
+                l10n.average,
                 _calcularPromedio(),
                 Icons.calculate,
               ),
               _buildEstadisticaCard(
-                'Peso máximo',
+                l10n.maximum,
                 _calcularMaximo(),
                 Icons.trending_up,
                 Colors.orange,
               ),
               _buildEstadisticaCard(
-                'Peso mínimo',
+                l10n.minimum,
                 _calcularMinimo(),
                 Icons.trending_down,
                 Colors.green,
               ),
               _buildEstadisticaCard(
-                'Registros',
-                '${historialCompleto.length} días',
+                l10n.records,
+                '${_historialPeso.length} ${l10n.records}',
                 Icons.calendar_today,
                 Colors.purple,
               ),
@@ -564,7 +809,6 @@ class _PesoPageState extends State<PesoPage> {
     );
   }
 
-  // Funciones auxiliares para la vista total
   Widget _buildTotalInfo(
     String label,
     String valor,
@@ -617,229 +861,13 @@ class _PesoPageState extends State<PesoPage> {
       ),
     );
   }
-
-  String _calcularPromedio() {
-    if (_historialPeso.isEmpty) return 'N/A';
-    double suma = 0;
-    for (var registro in _historialPeso) {
-      suma += registro['peso'].toDouble();
-    }
-    return '${(suma / _historialPeso.length).toStringAsFixed(1)} kg';
-  }
-
-  String _calcularMaximo() {
-    if (_historialPeso.isEmpty) return 'N/A';
-    double maximo = 0;
-    for (var registro in _historialPeso) {
-      maximo = maximo > registro['peso'] ? maximo : registro['peso'].toDouble();
-    }
-    return '${maximo.toStringAsFixed(1)} kg';
-  }
-
-  String _calcularMinimo() {
-    if (_historialPeso.isEmpty) return 'N/A';
-    double minimo = double.infinity;
-    for (var registro in _historialPeso) {
-      minimo = minimo < registro['peso'] ? minimo : registro['peso'].toDouble();
-    }
-    return '${minimo.toStringAsFixed(1)} kg';
-  }
-
-  Widget _buildResumenMensual() {
-    final diasDelMes = _generarDiasDelMes();
-    if (diasDelMes.isEmpty) return const SizedBox();
-
-    final pesosDelMes = diasDelMes
-        .map((f) => _pesosPorFecha[DateFormat('yyyy-MM-dd').format(f)])
-        .where((p) => p != null)
-        .toList();
-
-    if (pesosDelMes.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        child: const Text(
-          'No hay registros de peso este mes',
-          style: TextStyle(fontStyle: FontStyle.italic),
-        ),
-      );
-    }
-
-    final primerPeso = pesosDelMes.first!;
-    final ultimoPeso = pesosDelMes.last!;
-    final diferencia = ultimoPeso - primerPeso;
-    final colorDiferencia = diferencia > 0 ? Colors.red : Colors.green;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.teal.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildMiniResumen(
-            'Inicio mes',
-            '${primerPeso.toStringAsFixed(1)} kg',
-          ),
-          _buildMiniResumen('Final mes', '${ultimoPeso.toStringAsFixed(1)} kg'),
-          _buildMiniResumen(
-            'Cambio',
-            '${diferencia.toStringAsFixed(1)} kg',
-            color: colorDiferencia,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniResumen(String label, String valor, {Color? color}) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 4),
-        Text(
-          valor,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: color ?? Colors.black,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLeyendaItem(String texto, Color color) {
-    return Row(
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          texto,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildListaDias() {
-    final dias = _generarDiasDelMes();
-
-    return ListView.builder(
-      itemCount: dias.length,
-      itemBuilder: (context, index) {
-        final fecha = dias[index];
-        final fechaStr = DateFormat('yyyy-MM-dd').format(fecha);
-        final peso = _pesosPorFecha[fechaStr];
-
-        double pesoAnterior = 0;
-        if (index > 0) {
-          final fechaAnterior = dias[index - 1];
-          final fechaAnteriorStr = DateFormat(
-            'yyyy-MM-dd',
-          ).format(fechaAnterior);
-          pesoAnterior = _pesosPorFecha[fechaAnteriorStr] ?? 0;
-        }
-
-        final colorCambio = peso != null && pesoAnterior > 0
-            ? _getColorForChange(pesoAnterior, peso)
-            : Colors.grey;
-
-        final esFechaInicioSinEditar = _esFechaInicioSinEditar(fecha);
-
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: esFechaInicioSinEditar
-                  ? Colors.orange.withOpacity(0.2)
-                  : colorCambio.withOpacity(0.2),
-              child: Icon(
-                esFechaInicioSinEditar
-                    ? Icons.warning_amber_rounded
-                    : (peso != null ? Icons.monitor_weight : Icons.pending),
-                color: esFechaInicioSinEditar ? Colors.orange : colorCambio,
-              ),
-            ),
-            title: Text(
-              DateFormat('EEEE, d').format(fecha),
-              style: TextStyle(
-                fontWeight: esFechaInicioSinEditar
-                    ? FontWeight.bold
-                    : FontWeight.w500,
-                color: esFechaInicioSinEditar ? Colors.orange.shade800 : null,
-              ),
-            ),
-            subtitle: Text(
-              peso != null
-                  ? '${peso.toStringAsFixed(1)} kg'
-                  : 'Pendiente de registrar',
-              style: TextStyle(
-                color: esFechaInicioSinEditar
-                    ? Colors.orange.shade600
-                    : (peso != null ? Colors.black : Colors.grey),
-              ),
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (peso != null)
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () => _eliminarPeso(fecha),
-                  ),
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.teal),
-                  onPressed: () => _editarPeso(fecha, peso ?? 0),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMensajeSinDias() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.calendar_today, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            'No hay días para mostrar en este mes',
-            style: TextStyle(color: Colors.grey.shade600),
-          ),
-          if (_fechaInicio != null)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'El primer mes disponible es ${DateFormat('MMMM yyyy').format(_fechaInicio!)}',
-                style: const TextStyle(fontStyle: FontStyle.italic),
-                textAlign: TextAlign.center,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
-// Custom painter para el gráfico de evolución
 class PesoGraphPainter extends CustomPainter {
   final List<Map<String, dynamic>> historial;
+  final String languageCode;
 
-  PesoGraphPainter({required this.historial});
+  PesoGraphPainter({required this.historial, required this.languageCode});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -852,11 +880,15 @@ class PesoGraphPainter extends CustomPainter {
     final pointPaint = Paint()..style = PaintingStyle.fill;
 
     final puntos = <Offset>[];
+    final fechas = <DateTime>[];
     double minPeso = double.infinity;
     double maxPeso = 0;
 
     for (var registro in historial) {
+      final fecha = (registro['fecha'] as Timestamp).toDate();
       final peso = registro['peso'].toDouble();
+
+      fechas.add(fecha);
       if (peso < minPeso) minPeso = peso;
       if (peso > maxPeso) maxPeso = peso;
     }
@@ -865,7 +897,7 @@ class PesoGraphPainter extends CustomPainter {
     maxPeso += 2;
 
     final anchoDisponible = size.width;
-    final altoDisponible = size.height - 20;
+    final altoDisponible = size.height - 40;
 
     final pasoX = anchoDisponible / (historial.length - 1);
 
@@ -874,7 +906,7 @@ class PesoGraphPainter extends CustomPainter {
       ..strokeWidth = 1;
 
     for (int i = 0; i <= 4; i++) {
-      final y = 10 + (altoDisponible * (i / 4));
+      final y = 30 + (altoDisponible * (i / 4));
       canvas.drawLine(
         Offset(0, y),
         Offset(anchoDisponible, y),
@@ -886,10 +918,10 @@ class PesoGraphPainter extends CustomPainter {
       final peso = historial[i]['peso'].toDouble();
       final x = i * pasoX;
       final y =
-          10 +
+          30 +
           (altoDisponible -
               ((peso - minPeso) / (maxPeso - minPeso) * altoDisponible));
-      puntos.add(Offset(x, y.clamp(10, 10 + altoDisponible)));
+      puntos.add(Offset(x, y.clamp(30, 30 + altoDisponible)));
     }
 
     for (int i = 0; i < puntos.length - 1; i++) {
@@ -930,41 +962,96 @@ class PesoGraphPainter extends CustomPainter {
       canvas.drawCircle(puntos[i], 6, pointPaint);
       pointPaint.style = PaintingStyle.fill;
 
-      final textSpan = TextSpan(
-        text: '${peso.toStringAsFixed(1)}',
-        style: const TextStyle(
-          color: Colors.black87,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          backgroundColor: Colors.white70,
-        ),
-      );
-      final textPainter = TextPainter(
-        text: textSpan,
-        textDirection: ui.TextDirection.ltr,
-      );
-      textPainter.layout();
+      if (i == 0 ||
+          i == puntos.length - 1 ||
+          i == (puntos.length / 2).floor()) {
+        final textSpan = TextSpan(
+          text: '${peso.toStringAsFixed(1)}',
+          style: const TextStyle(
+            color: Colors.black87,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            backgroundColor: Colors.white70,
+          ),
+        );
+        final textPainter = TextPainter(
+          text: textSpan,
+          textDirection: ui.TextDirection.ltr,
+        );
+        textPainter.layout();
 
-      double dx = puntos[i].dx - textPainter.width / 2;
-      if (dx < 2) dx = 2;
-      if (dx + textPainter.width > anchoDisponible - 2) {
-        dx = anchoDisponible - textPainter.width - 2;
+        double dx = puntos[i].dx - textPainter.width / 2;
+        if (dx < 2) dx = 2;
+        if (dx + textPainter.width > anchoDisponible - 2) {
+          dx = anchoDisponible - textPainter.width - 2;
+        }
+
+        final offset = Offset(dx, puntos[i].dy - 20);
+
+        final backgroundRect = Rect.fromLTWH(
+          offset.dx - 2,
+          offset.dy - 2,
+          textPainter.width + 4,
+          textPainter.height + 4,
+        );
+        canvas.drawRect(
+          backgroundRect,
+          Paint()..color = Colors.white.withOpacity(0.7),
+        );
+
+        textPainter.paint(canvas, offset);
+      }
+    }
+
+    if (fechas.isNotEmpty) {
+      final textStyle = const TextStyle(
+        color: Colors.teal,
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+      );
+
+      void _drawFecha(String texto, double x) {
+        final textSpan = TextSpan(text: texto, style: textStyle);
+        final textPainter = TextPainter(
+          text: textSpan,
+          textDirection: ui.TextDirection.ltr,
+        );
+        textPainter.layout();
+
+        double dx = x - textPainter.width / 2;
+        if (dx < 2) dx = 2;
+        if (dx + textPainter.width > anchoDisponible - 2) {
+          dx = anchoDisponible - textPainter.width - 2;
+        }
+
+        final offset = Offset(dx, altoDisponible + 45);
+
+        final backgroundRect = Rect.fromLTWH(
+          offset.dx - 2,
+          offset.dy - 2,
+          textPainter.width + 4,
+          textPainter.height + 4,
+        );
+        canvas.drawRect(
+          backgroundRect,
+          Paint()..color = Colors.white.withOpacity(0.8),
+        );
+
+        textPainter.paint(canvas, offset);
       }
 
-      final offset = Offset(dx, puntos[i].dy - 20);
-
-      final backgroundRect = Rect.fromLTWH(
-        offset.dx - 2,
-        offset.dy - 2,
-        textPainter.width + 4,
-        textPainter.height + 4,
+      _drawFecha(DateFormat('MMM yyyy', languageCode).format(fechas.first), 0);
+      if (fechas.length > 2) {
+        final indexCentral = (fechas.length / 2).floor();
+        _drawFecha(
+          DateFormat('MMM yyyy', languageCode).format(fechas[indexCentral]),
+          anchoDisponible / 2,
+        );
+      }
+      _drawFecha(
+        DateFormat('MMM yyyy', languageCode).format(fechas.last),
+        anchoDisponible,
       );
-      canvas.drawRect(
-        backgroundRect,
-        Paint()..color = Colors.white.withOpacity(0.7),
-      );
-
-      textPainter.paint(canvas, offset);
     }
   }
 

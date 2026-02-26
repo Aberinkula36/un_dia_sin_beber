@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
+import 'l10n/app_localizations.dart';
+import 'locale_provider.dart';
 
 class UpdateChecker {
   static const String versionUrl =
@@ -12,12 +15,10 @@ class UpdateChecker {
     try {
       print("🔍 Verificando actualizaciones...");
 
-      // Obtener versión actual
       PackageInfo packageInfo = await PackageInfo.fromPlatform();
       String currentVersion = packageInfo.version;
       print("📱 Versión actual: $currentVersion");
 
-      // Obtener información de versión desde GitHub
       print("🌐 Consultando: $versionUrl");
       final response = await http.get(Uri.parse(versionUrl));
 
@@ -34,12 +35,20 @@ class UpdateChecker {
 
         if (_isNewerVersion(latestVersion, currentVersion)) {
           print("🔄 ¡Hay actualización disponible!");
+
+          // Obtener el LocaleProvider para pasar el idioma actual
+          final localeProvider = Provider.of<LocaleProvider>(
+            context,
+            listen: false,
+          );
+
           await _showUpdateDialog(
             context,
             latestVersion,
             apkUrl,
             notes,
             mandatory,
+            localeProvider.locale.languageCode,
           );
         } else {
           print("✅ No hay actualizaciones disponibles");
@@ -72,12 +81,12 @@ class UpdateChecker {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Error'),
+          title: Text(AppLocalizations.of(context).error),
           content: Text(mensaje),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Aceptar'),
+              child: Text(AppLocalizations.of(context).ok),
             ),
           ],
         );
@@ -91,16 +100,17 @@ class UpdateChecker {
     String apkUrl,
     String notes,
     bool mandatory,
+    String languageCode,
   ) async {
+    final l10n = AppLocalizations.of(context);
+
     return showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text(
-            mandatory
-                ? 'Actualización requerida'
-                : '¡Nueva versión disponible!',
+            mandatory ? l10n.mandatoryUpdate : l10n.updateAvailable,
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           content: SingleChildScrollView(
@@ -109,16 +119,16 @@ class UpdateChecker {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Versión $version disponible',
+                  '${l10n.records} $version', // Usamos "records" como "versión"
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 15),
-                const Text(
-                  'Novedades:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                Text(
+                  l10n.releaseNotes,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 5),
                 Container(
@@ -138,15 +148,21 @@ class UpdateChecker {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.blue.shade200),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 16, color: Colors.blue),
-                      SizedBox(width: 8),
+                      const Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.blue,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'La descarga se abrirá en el navegador externo. '
-                          'Después de instalar el APK, vuelve a abrir la app.',
-                          style: TextStyle(fontSize: 12, color: Colors.blue),
+                          l10n.downloadInfo,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue,
+                          ),
                         ),
                       ),
                     ],
@@ -161,9 +177,9 @@ class UpdateChecker {
                 onPressed: () {
                   Navigator.of(context).pop();
                 },
-                child: const Text(
-                  'Más tarde',
-                  style: TextStyle(color: Colors.grey),
+                child: Text(
+                  l10n.later,
+                  style: const TextStyle(color: Colors.grey),
                 ),
               ),
             ElevatedButton(
@@ -200,7 +216,7 @@ class UpdateChecker {
                 foregroundColor: Colors.white,
                 minimumSize: const Size(120, 40),
               ),
-              child: const Text('Descargar'),
+              child: Text(l10n.download),
             ),
           ],
         );

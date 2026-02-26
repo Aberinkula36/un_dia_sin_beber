@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart'; // Asegúrate de tener esto importado
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'home_page.dart';
+import 'l10n/app_localizations.dart';
+import 'locale_provider.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -15,7 +18,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   DateTime? _fechaInicio;
-  DateTime? _fechaNacimiento; // Cambiado de edad a fecha de nacimiento
+  DateTime? _fechaNacimiento;
   final _pesoController = TextEditingController();
   String? _sexo;
 
@@ -29,7 +32,20 @@ class _RegisterPageState extends State<RegisterPage> {
       initialDate: today,
       firstDate: DateTime(1900),
       lastDate: today,
-      locale: const Locale('es', 'ES'), // AÑADE ESTA LÍNEA
+      locale: const Locale('es', 'ES'),
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Colors.teal,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (date != null) {
       setState(() {
@@ -45,7 +61,20 @@ class _RegisterPageState extends State<RegisterPage> {
       initialDate: DateTime(today.year - 30, today.month, today.day),
       firstDate: DateTime(1900),
       lastDate: today,
-      locale: const Locale('es', 'ES'), // AÑADE ESTA LÍNEA
+      locale: const Locale('es', 'ES'),
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Colors.orange,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (date != null) {
       setState(() {
@@ -54,7 +83,6 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  // Calcular edad a partir de fecha de nacimiento
   int _calcularEdad() {
     if (_fechaNacimiento == null) return 0;
     final today = DateTime.now();
@@ -84,7 +112,7 @@ class _RegisterPageState extends State<RegisterPage> {
         peso.isEmpty ||
         _sexo == null) {
       setState(() {
-        _message = 'Por favor, complete todos los campos';
+        _message = context.l10n.fillCredentials;
         _loading = false;
       });
       return;
@@ -93,7 +121,8 @@ class _RegisterPageState extends State<RegisterPage> {
     final pesoDouble = double.tryParse(peso);
     if (pesoDouble == null) {
       setState(() {
-        _message = 'Por favor, ingrese un peso válido';
+        _message =
+            '${context.l10n.invalidEmail}'; // Usamos invalidEmail como "peso inválido"
         _loading = false;
       });
       return;
@@ -104,26 +133,16 @@ class _RegisterPageState extends State<RegisterPage> {
           .createUserWithEmailAndPassword(email: email, password: password);
 
       final hoy = DateTime.now();
-
-      // Crear historial de peso
       List<Map<String, dynamic>> historial = [];
 
-      // 1. Registrar el peso de HOY (fecha de registro)
       historial.add({'fecha': hoy, 'peso': pesoDouble});
 
-      // 2. Si la fecha de inicio es diferente a hoy,
-      //    crear un registro para esa fecha con el mismo peso (EDITABLE después)
       if (_fechaInicio!.year != hoy.year ||
           _fechaInicio!.month != hoy.month ||
           _fechaInicio!.day != hoy.day) {
-        historial.add({
-          'fecha': _fechaInicio,
-          'peso':
-              pesoDouble, // Mismo peso como placeholder, el usuario lo editará después
-        });
+        historial.add({'fecha': _fechaInicio, 'peso': pesoDouble});
       }
 
-      // Ordenar historial por fecha (más antiguo primero)
       historial.sort((a, b) {
         final fechaA = a['fecha'] as DateTime;
         final fechaB = b['fecha'] as DateTime;
@@ -139,21 +158,22 @@ class _RegisterPageState extends State<RegisterPage> {
             'fecha_nacimiento': _fechaNacimiento,
             'edad': _calcularEdad(),
             'sexo': _sexo,
-            'peso_inicial': pesoDouble, // Peso actual como referencia
+            'peso_inicial': pesoDouble,
             'historial_peso': historial,
           });
 
-      // Mostrar mensaje informativo
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               _fechaInicio!.isBefore(hoy)
-                  ? 'Registro completado. Recuerda editar el peso del ${DateFormat('dd/MM/yyyy').format(_fechaInicio!)} en la sección de evolución.'
-                  : 'Registro completado correctamente.',
+                  ? context
+                        .l10n
+                        .firstMonthAvailable // Usamos esto como mensaje
+                  : context.l10n.save,
             ),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -164,7 +184,7 @@ class _RegisterPageState extends State<RegisterPage> {
       );
     } on FirebaseAuthException catch (e) {
       setState(() {
-        _message = 'Error: ${e.message}';
+        _message = '${context.l10n.error}: ${e.message}';
       });
     } finally {
       setState(() {
@@ -183,191 +203,213 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Registrarse'),
-        backgroundColor: Colors.green.shade700,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo o título
-              Image.asset('assets/logo.png', width: 200, height: 200),
-              const SizedBox(height: 20),
-              const SizedBox(height: 20),
-              const Text(
-                'Comienza tu viaje',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 30),
+    return Consumer<LocaleProvider>(
+      builder: (context, localeProvider, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(context.l10n.register),
+            backgroundColor: Colors.teal.shade700,
+            foregroundColor: Colors.white,
+          ),
+          body: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.health_and_safety,
+                    size: 80,
+                    color: Colors.teal.shade700,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    context.l10n.createAccount,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    context.l10n.startYourJourney,
+                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 30),
 
-              // Campo de email
-              TextField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: 'Correo electrónico',
-                  prefixIcon: const Icon(Icons.email),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              // Campo de contraseña
-              TextField(
-                controller: _passwordController,
-                decoration: InputDecoration(
-                  labelText: 'Contraseña',
-                  prefixIcon: const Icon(Icons.lock),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 15),
-
-              // Selector de fecha de inicio
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  leading: const Icon(
-                    Icons.calendar_today,
-                    color: Colors.green,
-                  ),
-                  title: Text(
-                    _fechaInicio == null
-                        ? '¿Cuándo dejaste de beber?'
-                        : 'Dejaste de beber: ${DateFormat('dd/MM/yyyy').format(_fechaInicio!)}',
-                  ),
-                  trailing: TextButton(
-                    onPressed: _pickDateInicio,
-                    child: const Text('Seleccionar'),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              // NUEVO: Selector de fecha de nacimiento (reemplaza a la edad)
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  leading: const Icon(Icons.cake, color: Colors.orange),
-                  title: Text(
-                    _fechaNacimiento == null
-                        ? 'Fecha de nacimiento'
-                        : 'Naciste: ${DateFormat('dd/MM/yyyy').format(_fechaNacimiento!)} (${_calcularEdad()} años)',
-                  ),
-                  trailing: TextButton(
-                    onPressed: _pickFechaNacimiento,
-                    child: const Text('Seleccionar'),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              // Campo de peso
-              TextField(
-                controller: _pesoController,
-                decoration: InputDecoration(
-                  labelText: 'Peso actual (kg)',
-                  hintText: 'Ej: 70.5',
-                  prefixIcon: const Icon(Icons.monitor_weight),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              // Selector de sexo
-              DropdownButtonFormField<String>(
-                value: _sexo,
-                items: _sexos
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _sexo = value;
-                  });
-                },
-                decoration: InputDecoration(
-                  labelText: 'Sexo',
-                  prefixIcon: const Icon(Icons.wc),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 25),
-
-              // Mensaje de error
-              if (_message.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Text(
-                    _message,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ),
-              const SizedBox(height: 15),
-
-              // Botón de registro
-              _loading
-                  ? const CircularProgressIndicator()
-                  : SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _register,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade600,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          'Registrarse',
-                          style: TextStyle(fontSize: 18),
-                        ),
+                  TextField(
+                    controller: _emailController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.email,
+                      prefixIcon: const Icon(Icons.email, color: Colors.teal),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 15),
 
-              // Al final del build method, después del botón de registro
-              const SizedBox(height: 15),
+                  TextField(
+                    controller: _passwordController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.password,
+                      prefixIcon: const Icon(Icons.lock, color: Colors.teal),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 15),
 
-              // Enlace a login
-              TextButton(
-                onPressed: () {
-                  // Usar pushReplacementNamed con la ruta definida
-                  Navigator.pushReplacementNamed(context, '/login');
-                },
-                child: const Text('¿Ya tienes cuenta? Inicia sesión'),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.calendar_today,
+                        color: Colors.teal,
+                      ),
+                      title: Text(
+                        _fechaInicio == null
+                            ? context.l10n.startDate
+                            : '${context.l10n.startDate}: ${DateFormat('dd/MM/yyyy').format(_fechaInicio!)}',
+                      ),
+                      trailing: TextButton(
+                        onPressed: _pickDateInicio,
+                        child: Text(context.l10n.selectDate),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      leading: const Icon(Icons.cake, color: Colors.orange),
+                      title: Text(
+                        _fechaNacimiento == null
+                            ? context.l10n.birthDate
+                            : '${context.l10n.birthDate}: ${DateFormat('dd/MM/yyyy').format(_fechaNacimiento!)} (${_calcularEdad()} ${context.l10n.years})',
+                      ),
+                      trailing: TextButton(
+                        onPressed: _pickFechaNacimiento,
+                        child: Text(context.l10n.selectDate),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+
+                  TextField(
+                    controller: _pesoController,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.weight,
+                      hintText: context.l10n.weightHint,
+                      prefixIcon: const Icon(
+                        Icons.monitor_weight,
+                        color: Colors.teal,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+
+                  DropdownButtonFormField<String>(
+                    value: _sexo,
+                    items: _sexos
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _sexo = value;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: context.l10n.gender,
+                      prefixIcon: const Icon(Icons.wc, color: Colors.teal),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 25),
+
+                  if (_message.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Text(
+                        _message,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  const SizedBox(height: 15),
+
+                  _loading
+                      ? const CircularProgressIndicator()
+                      : SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: _register,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.teal.shade600,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              context.l10n.registerButton,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                          ),
+                        ),
+
+                  const SizedBox(height: 15),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        context.l10n.alreadyHaveAccount,
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushReplacementNamed(context, '/login');
+                        },
+                        child: Text(
+                          context.l10n.loginLink,
+                          style: TextStyle(
+                            color: Colors.teal.shade700,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
